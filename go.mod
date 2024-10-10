@@ -1,4 +1,4 @@
-module github.com/dinowar/fin-service
+module github.com/dinowar/gateway-service
 
 go 1.22.5
 
