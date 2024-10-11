@@ -1,161 +1,224 @@
 package server
 
 import (
-	"bytes"
+	"context"
 	"encoding/json"
-	model "github.com/dinowar/gateway-service/internal/pkg/domain"
+	"encoding/xml"
+	"fmt"
+	. "github.com/dinowar/gateway-service/internal/pkg/domain"
+	"github.com/dinowar/gateway-service/internal/pkg/service"
+	"io/ioutil"
 	"log"
 	"net/http"
+	"sync"
+	"time"
 )
 
-var transactions = make(map[string]model.Transaction)
+var (
+	transactionsMutex = &sync.Mutex{}
+	gateways          = map[string]PaymentGateway{}
+)
 
 type Server struct {
+	rep    *service.RepositoryService
+	logger *service.LogService
 }
 
-func NewAppServer() Server {
-	return Server{}
+func NewAppServer(rep *service.RepositoryService, logger *service.LogService) *Server {
+	return &Server{rep: rep, logger: logger}
 }
 
-func (server *Server) Deposit(w http.ResponseWriter, r *http.Request) {
-	var depositReq model.DepositRequest
-	if err := json.NewDecoder(r.Body).Decode(&depositReq); err != nil {
-		http.Error(w, "Invalid request", http.StatusBadRequest)
+func (server *Server) RegisterGateway(name string, gateway PaymentGateway) {
+	gateways[name] = gateway
+	log.Printf("registered gateway: %s", name)
+}
+
+func (server *Server) HandleDeposit(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
 		return
 	}
 
-	transactionID := "tx_" + depositReq.AccountID // Генерация уникального ID транзакции
-
-	transactions[transactionID] = model.Transaction{
-		ID:       transactionID,
-		UserID:   depositReq.AccountID,
-		Status:   "pending", // Статус пока что "в ожидании"
-		Amount:   depositReq.Amount,
-		Currency: depositReq.Currency,
+	gateway := r.URL.Query().Get("gateway")
+	if gateway == "" {
+		http.Error(w, "Missing gateway parameter", http.StatusBadRequest)
+		return
 	}
 
-	gatewayURL := determineGatewayURL(depositReq.Gateway)
-	requestData := map[string]interface{}{
-		"transaction_id": transactionID,
-		"amount":         depositReq.Amount,
-		"currency":       depositReq.Currency,
+	gw, exists := gateways[gateway]
+	if !exists {
+		http.Error(w, "Gateway not found", http.StatusBadRequest)
+		return
 	}
 
-	response, err := callPaymentGateway(gatewayURL, requestData)
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	ch := make(chan Transaction, 1)
+
+	go func() {
+		resp, err := gw.ProcessDeposit(r)
+		if err != nil {
+			log.Printf("Failed to process deposit: %v", err)
+			return
+		}
+		ch <- resp
+	}()
+
+	select {
+	case transaction := <-ch:
+		transactionID := fmt.Sprintf("txn-%d", time.Now().UnixNano())
+		transaction.ID = transactionID
+		transactionsMutex.Lock()
+		err := server.rep.SaveTransaction(transaction)
+		transactionsMutex.Unlock()
+		if err != nil {
+			http.Error(w, "Failed to save transaction", http.StatusInternalServerError)
+			return
+		}
+
+		server.logger.LogTransaction(transaction)
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(transaction)
+	case <-ctx.Done():
+		http.Error(w, "Request timed out", http.StatusRequestTimeout)
+	}
+}
+
+func (server *Server) HandleWithdraw(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
+
+	gateway := r.URL.Query().Get("gateway")
+	if gateway == "" {
+		http.Error(w, "Missing gateway parameter", http.StatusBadRequest)
+		return
+	}
+
+	gw, exists := gateways[gateway]
+	if !exists {
+		http.Error(w, "Gateway not found", http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	ch := make(chan Transaction, 1)
+
+	go func() {
+		resp, err := gw.ProcessWithdraw(r)
+		if err != nil {
+			log.Printf("Failed to process withdraw: %v", err)
+			return
+		}
+		ch <- resp
+	}()
+
+	select {
+	case transaction := <-ch:
+		transactionID := fmt.Sprintf("txn-%d", time.Now().UnixNano())
+		transaction.ID = transactionID
+		transactionsMutex.Lock()
+		trxErr := server.rep.SaveTransaction(transaction)
+		transactionsMutex.Unlock()
+		if trxErr != nil {
+			http.Error(w, "Failed to save transaction", http.StatusInternalServerError)
+			return
+		}
+
+		server.logger.LogTransaction(transaction)
+		w.Header().Set("Content-Type", "application/xml")
+		xml.NewEncoder(w).Encode(transaction)
+	case <-ctx.Done():
+		http.Error(w, "Request timed out", http.StatusRequestTimeout)
+	}
+}
+
+func (server *Server) HandleCallback(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
+
+	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		http.Error(w, "Error communicating with payment gateway", http.StatusInternalServerError)
+		http.Error(w, "Unable to read request body", http.StatusBadRequest)
 		return
 	}
 
-	log.Printf("Payment gateway response for deposit: %v", response)
-
-	w.WriteHeader(http.StatusAccepted)
-	json.NewEncoder(w).Encode(map[string]string{"transaction_id": transactionID})
-}
-
-func (server *Server) Withdraw(w http.ResponseWriter, r *http.Request) {
-	var withdrawReq model.WithdrawRequest
-	if err := json.NewDecoder(r.Body).Decode(&withdrawReq); err != nil {
-		http.Error(w, "Invalid request", http.StatusBadRequest)
+	log.Printf("Received callback: %s", string(body))
+	transactionID := r.URL.Query().Get("transaction_id")
+	if transactionID == "" {
+		http.Error(w, "Missing transaction_id", http.StatusBadRequest)
 		return
 	}
 
-	transactionID := "tx_" + withdrawReq.AccountID // Генерация уникального ID транзакции
-
-	transactions[transactionID] = model.Transaction{
-		ID:       transactionID,
-		UserID:   withdrawReq.AccountID,
-		Status:   "pending", // Статус пока что "в ожидании"
-		Amount:   withdrawReq.Amount,
-		Currency: withdrawReq.Currency,
+	transactionsMutex.Lock()
+	txn, trxGetErr := server.rep.GetTransaction(transactionID)
+	if trxGetErr != nil {
+		http.Error(w, "Transaction not found", http.StatusNotFound)
+		transactionsMutex.Unlock()
+		return
 	}
+	txn.Status = "updated"
 
-	gatewayURL := determineGatewayURL(withdrawReq.Gateway)
-	requestData := map[string]interface{}{
-		"transaction_id": transactionID,
-		"amount":         withdrawReq.Amount,
-		"currency":       withdrawReq.Currency,
-	}
-
-	response, err := callPaymentGateway(gatewayURL, requestData)
-	if err != nil {
-		http.Error(w, "Error communicating with payment gateway", http.StatusInternalServerError)
+	trxSaveErr := server.rep.SaveTransaction(txn)
+	transactionsMutex.Unlock()
+	if trxSaveErr != nil {
+		http.Error(w, "Failed to update transaction", http.StatusInternalServerError)
 		return
 	}
 
-	log.Printf("Payment gateway response for withdrawal: %v", response)
-
-	w.WriteHeader(http.StatusAccepted)
-	json.NewEncoder(w).Encode(map[string]string{"transaction_id": transactionID})
-}
-
-func (server *Server) Callback(w http.ResponseWriter, r *http.Request) {
-	var callbackResponse model.CallbackResponse
-	if err := json.NewDecoder(r.Body).Decode(&callbackResponse); err != nil {
-		http.Error(w, "Invalid callback", http.StatusBadRequest)
-		return
-	}
-
-	go processCallback(callbackResponse)
-
+	server.logger.LogTransaction(txn)
 	w.WriteHeader(http.StatusOK)
 }
 
-func (server *Server) CheckTransactionStatus(w http.ResponseWriter, r *http.Request) {
-	transactionID := r.URL.Query().Get("transaction_id")
-	transaction, exists := transactions[transactionID]
+func (server *Server) HandleGetTransaction(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
 
-	if !exists {
+	transactionID := r.URL.Query().Get("transaction_id")
+	if transactionID == "" {
+		http.Error(w, "Missing transaction_id", http.StatusBadRequest)
+		return
+	}
+
+	transactionsMutex.Lock()
+	txn, err := server.rep.GetTransaction(transactionID)
+	transactionsMutex.Unlock()
+	if err != nil {
 		http.Error(w, "Transaction not found", http.StatusNotFound)
 		return
 	}
 
-	json.NewEncoder(w).Encode(transaction)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(txn)
 }
 
-func processCallback(callbackResponse model.CallbackResponse) {
-	log.Printf("Received callback for transaction %s with status: %s", callbackResponse.TransactionID, callbackResponse.Status)
-
-	transaction, exists := transactions[callbackResponse.TransactionID]
-	if !exists {
-		log.Printf("Transaction %s not found", callbackResponse.TransactionID)
+func (server *Server) HandleGetAllTransactions(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
 		return
 	}
 
-	transaction.Status = callbackResponse.Status
-	transactions[callbackResponse.TransactionID] = transaction
-
-	sendEmailNotification(transaction.UserID, callbackResponse.Status)
-}
-
-func sendEmailNotification(userID string, status string) {
-	log.Printf("Sending email to user %s: Your transaction status is: %s", userID, status)
-}
-
-func callPaymentGateway(gatewayURL string, requestData map[string]interface{}) (interface{}, error) {
-	jsonData, err := json.Marshal(requestData)
-	if err != nil {
-		return nil, err
+	accountId := r.URL.Query().Get("accountId")
+	if accountId == "" {
+		http.Error(w, "Missing transaction_id", http.StatusBadRequest)
+		return
 	}
 
-	resp, err := http.Post(gatewayURL, "application/json", bytes.NewBuffer(jsonData))
-	if err != nil {
-		return nil, err
+	transactions, transactionsErr := server.rep.GetTransactions(accountId)
+	if transactionsErr != nil {
+		http.Error(w, "Transactions not found", http.StatusNotFound)
+		return
 	}
-	defer resp.Body.Close()
 
-	var response interface{}
-	err = json.NewDecoder(resp.Body).Decode(&response)
-	return response, err
-}
-
-func determineGatewayURL(gateway string) string {
-	switch gateway {
-	case "A":
-		return "https://api.gateway-a.com/deposit"
-	case "B":
-		return "https://api.gateway-b.com/deposit"
-	default:
-		return ""
-	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(transactions)
 }

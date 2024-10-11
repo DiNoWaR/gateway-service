@@ -1,28 +1,33 @@
 package domain
 
-type DepositRequest struct {
-	AccountID string  `json:"account_id"`
+import "encoding/xml"
+
+type JsonGatewayRequest struct {
 	Amount    float64 `json:"amount"`
 	Currency  string  `json:"currency"`
-	Gateway   string  `json:"gateway"`
+	AccountId string  `json:"account_id"`
 }
 
-type WithdrawRequest struct {
-	AccountID string  `json:"account_id"`
-	Amount    float64 `json:"amount"`
-	Currency  string  `json:"currency"`
-	Gateway   string  `json:"gateway"`
+type JsonGatewayResponse struct {
+	Status string `json:"status"`
 }
 
-type CallbackResponse struct {
-	TransactionID string `json:"transaction_id"`
-	Status        string `json:"status"`
+type XMLGatewayRequest struct {
+	XMLName   xml.Name `xml:"Request"`
+	Amount    float64  `xml:"Amount"`
+	Currency  string   `xml:"Currency"`
+	AccountId string   `json:"account_id"`
+}
+
+type XMLGatewayResponse struct {
+	XMLName xml.Name `xml:"Response"`
+	Status  string   `xml:"Status"`
 }
 
 type Transaction struct {
-	ID       string  `json:"id"`
-	UserID   string  `json:"user_id"`
-	Status   string  `json:"status"`
-	Amount   float64 `json:"amount"`
-	Currency string  `json:"currency"`
+	ID        string  `json:"id"`
+	AccountId string  `json:"account_id"`
+	Amount    float64 `json:"amount"`
+	Currency  string  `json:"currency"`
+	Status    string  `json:"status"`
 }
