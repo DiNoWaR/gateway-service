@@ -24,8 +24,8 @@ func (rep *RepositoryService) SaveTransaction(txn Transaction) error {
 
 func (rep *RepositoryService) GetTransaction(transactionID string) (Transaction, error) {
 	var txn Transaction
-	row := rep.db.QueryRow("SELECT id, amount, currency, status FROM transactions WHERE id = ?", transactionID)
-	trxErr := row.Scan(&txn.ID, &txn.Amount, &txn.Currency, &txn.Status)
+	row := rep.db.QueryRow("SELECT id, account_id, amount, currency, status, operation FROM transactions WHERE id = ?", transactionID)
+	trxErr := row.Scan(&txn.ID, &txn.AccountId, &txn.Amount, &txn.Currency, &txn.Status, &txn.Operation)
 	if trxErr != nil {
 		return Transaction{}, trxErr
 	}
@@ -34,7 +34,7 @@ func (rep *RepositoryService) GetTransaction(transactionID string) (Transaction,
 
 func (rep *RepositoryService) GetTransactions(accountId string) ([]Transaction, error) {
 	var transactions []Transaction
-	rows, trxErr := rep.db.Query("SELECT id, amount, currency, status FROM transactions where account_id = ?", accountId)
+	rows, trxErr := rep.db.Query("SELECT id, account_id, amount, currency, status, operation FROM transactions where account_id = ?", accountId)
 	if trxErr != nil {
 		return transactions, trxErr
 	}
@@ -42,7 +42,7 @@ func (rep *RepositoryService) GetTransactions(accountId string) ([]Transaction, 
 
 	for rows.Next() {
 		var txn Transaction
-		scanErr := rows.Scan(&txn.ID, &txn.Amount, &txn.Currency, &txn.Status)
+		scanErr := rows.Scan(&txn.ID, &txn.AccountId, &txn.Amount, &txn.Currency, &txn.Status, &txn.Operation)
 		if scanErr != nil {
 			return transactions, scanErr
 		}

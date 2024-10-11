@@ -17,7 +17,8 @@ func InitDB() (*sql.DB, error) {
 		account_id TEXT,
 		amount REAL,
 		currency TEXT,
-		status TEXT
+		status TEXT,
+		operation TEXT,
 	)`
 	_, execErr := db.Exec(createTableQuery)
 	if execErr != nil {

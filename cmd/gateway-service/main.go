@@ -17,7 +17,7 @@ func main() {
 
 	repService := service.NewRepositoryService(db)
 	logService := service.NewLogService()
-	appServer := server.NewAppServer(repService, logService)
+	appServer := server.NewAppServer(repService, logService, 10)
 
 	appServer.RegisterGateway("JsonGateway", &domain.JsonGateway{})
 	appServer.RegisterGateway("XMLGateway", &domain.XMLGateway{})

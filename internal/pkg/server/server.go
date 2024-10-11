@@ -3,11 +3,10 @@ package server
 import (
 	"context"
 	"encoding/json"
-	"encoding/xml"
 	"fmt"
 	. "github.com/dinowar/gateway-service/internal/pkg/domain"
 	"github.com/dinowar/gateway-service/internal/pkg/service"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"sync"
@@ -15,25 +14,53 @@ import (
 )
 
 var (
-	transactionsMutex = &sync.Mutex{}
-	gateways          = map[string]PaymentGateway{}
+	gateways = map[string]PaymentGateway{}
 )
 
 type Server struct {
-	rep    *service.RepositoryService
-	logger *service.LogService
+	rep        *service.RepositoryService
+	logger     *service.LogService
+	mux        sync.RWMutex
+	workerPool chan struct{}
 }
 
-func NewAppServer(rep *service.RepositoryService, logger *service.LogService) *Server {
-	return &Server{rep: rep, logger: logger}
+func NewAppServer(rep *service.RepositoryService, logger *service.LogService, workerCount int) *Server {
+	return &Server{
+		rep:        rep,
+		logger:     logger,
+		workerPool: make(chan struct{}, workerCount),
+	}
 }
 
 func (server *Server) RegisterGateway(name string, gateway PaymentGateway) {
+	server.mux.Lock()
+	defer server.mux.Unlock()
 	gateways[name] = gateway
 	log.Printf("registered gateway: %s", name)
 }
 
-func (server *Server) HandleDeposit(w http.ResponseWriter, r *http.Request) {
+func (server *Server) handleTransaction(w http.ResponseWriter, r *http.Request, transactionType string) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		AccountID string  `json:"accountId"`
+		Amount    float64 `json:"amount"`
+		Currency  string  `json:"currency"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.AccountID == "" || req.Amount <= 0 {
+		http.Error(w, "Missing or invalid parameters", http.StatusBadRequest)
+		return
+	}
+
 	if r.Method != http.MethodPost {
 		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
 		return
@@ -45,7 +72,14 @@ func (server *Server) HandleDeposit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if gateway == "" {
+		http.Error(w, "Missing gateway parameter", http.StatusBadRequest)
+		return
+	}
+
+	server.mux.RLock()
 	gw, exists := gateways[gateway]
+	server.mux.RUnlock()
 	if !exists {
 		http.Error(w, "Gateway not found", http.StatusBadRequest)
 		return
@@ -54,88 +88,43 @@ func (server *Server) HandleDeposit(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
-	ch := make(chan Transaction, 1)
-
-	go func() {
-		resp, err := gw.ProcessDeposit(r)
+	select {
+	case server.workerPool <- struct{}{}:
+		defer func() { <-server.workerPool }()
+		var resp Transaction
+		var err error
+		if transactionType == "deposit" {
+			resp, err = gw.ProcessDeposit(req)
+		} else {
+			resp, err = gw.ProcessWithdraw(req)
+		}
 		if err != nil {
-			log.Printf("Failed to process deposit: %v", err)
+			log.Printf("Failed to process %s: %v", transactionType, err)
+			http.Error(w, "Failed to process transaction", http.StatusInternalServerError)
 			return
 		}
-		ch <- resp
-	}()
 
-	select {
-	case transaction := <-ch:
 		transactionID := fmt.Sprintf("txn-%d", time.Now().UnixNano())
-		transaction.ID = transactionID
-		transactionsMutex.Lock()
-		err := server.rep.SaveTransaction(transaction)
-		transactionsMutex.Unlock()
-		if err != nil {
+		resp.ID = transactionID
+		if err := server.rep.SaveTransaction(resp); err != nil {
 			http.Error(w, "Failed to save transaction", http.StatusInternalServerError)
 			return
 		}
 
-		server.logger.LogTransaction(transaction)
-
+		server.logger.LogTransaction(resp)
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(transaction)
+		json.NewEncoder(w).Encode(resp)
 	case <-ctx.Done():
 		http.Error(w, "Request timed out", http.StatusRequestTimeout)
 	}
 }
 
+func (server *Server) HandleDeposit(w http.ResponseWriter, r *http.Request) {
+	server.handleTransaction(w, r, "$2")
+}
+
 func (server *Server) HandleWithdraw(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
-		return
-	}
-
-	gateway := r.URL.Query().Get("gateway")
-	if gateway == "" {
-		http.Error(w, "Missing gateway parameter", http.StatusBadRequest)
-		return
-	}
-
-	gw, exists := gateways[gateway]
-	if !exists {
-		http.Error(w, "Gateway not found", http.StatusBadRequest)
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-	defer cancel()
-
-	ch := make(chan Transaction, 1)
-
-	go func() {
-		resp, err := gw.ProcessWithdraw(r)
-		if err != nil {
-			log.Printf("Failed to process withdraw: %v", err)
-			return
-		}
-		ch <- resp
-	}()
-
-	select {
-	case transaction := <-ch:
-		transactionID := fmt.Sprintf("txn-%d", time.Now().UnixNano())
-		transaction.ID = transactionID
-		transactionsMutex.Lock()
-		trxErr := server.rep.SaveTransaction(transaction)
-		transactionsMutex.Unlock()
-		if trxErr != nil {
-			http.Error(w, "Failed to save transaction", http.StatusInternalServerError)
-			return
-		}
-
-		server.logger.LogTransaction(transaction)
-		w.Header().Set("Content-Type", "application/xml")
-		xml.NewEncoder(w).Encode(transaction)
-	case <-ctx.Done():
-		http.Error(w, "Request timed out", http.StatusRequestTimeout)
-	}
+	server.handleTransaction(w, r, "$2")
 }
 
 func (server *Server) HandleCallback(w http.ResponseWriter, r *http.Request) {
@@ -144,7 +133,7 @@ func (server *Server) HandleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body, err := ioutil.ReadAll(r.Body)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "Unable to read request body", http.StatusBadRequest)
 		return
@@ -157,18 +146,14 @@ func (server *Server) HandleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	transactionsMutex.Lock()
 	txn, trxGetErr := server.rep.GetTransaction(transactionID)
 	if trxGetErr != nil {
 		http.Error(w, "Transaction not found", http.StatusNotFound)
-		transactionsMutex.Unlock()
 		return
 	}
-	txn.Status = "updated"
+	txn.Status = "success"
 
-	trxSaveErr := server.rep.SaveTransaction(txn)
-	transactionsMutex.Unlock()
-	if trxSaveErr != nil {
+	if trxSaveErr := server.rep.SaveTransaction(txn); trxSaveErr != nil {
 		http.Error(w, "Failed to update transaction", http.StatusInternalServerError)
 		return
 	}
@@ -189,9 +174,7 @@ func (server *Server) HandleGetTransaction(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	transactionsMutex.Lock()
 	txn, err := server.rep.GetTransaction(transactionID)
-	transactionsMutex.Unlock()
 	if err != nil {
 		http.Error(w, "Transaction not found", http.StatusNotFound)
 		return
@@ -208,12 +191,10 @@ func (server *Server) HandleGetAllTransactions(w http.ResponseWriter, r *http.Re
 	}
 
 	accountId := r.URL.Query().Get("accountId")
-	if accountId == "" {
-		http.Error(w, "Missing transaction_id", http.StatusBadRequest)
-		return
-	}
 
-	transactions, transactionsErr := server.rep.GetTransactions(accountId)
+	page := r.URL.Query().Get("page")
+	pageSize := r.URL.Query().Get("page_size")
+	transactions, transactionsErr := server.rep.GetTransactions(accountId, page, pageSize)
 	if transactionsErr != nil {
 		http.Error(w, "Transactions not found", http.StatusNotFound)
 		return

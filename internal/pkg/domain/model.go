@@ -30,4 +30,5 @@ type Transaction struct {
 	Amount    float64 `json:"amount"`
 	Currency  string  `json:"currency"`
 	Status    string  `json:"status"`
+	Operation string  `json:"operation"`
 }
