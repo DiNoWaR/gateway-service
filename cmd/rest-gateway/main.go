@@ -1,18 +1,20 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/dinowar/gateway-service/internal/pkg/config"
 	. "github.com/dinowar/gateway-service/internal/pkg/domain/common"
 	. "github.com/dinowar/gateway-service/internal/pkg/domain/rest_gateway"
 	"github.com/google/uuid"
+	"github.com/sethvargo/go-envconfig"
 	"log"
 	"net/http"
 )
 
 const (
 	gatewayId = "rest_gateway"
-	address   = "rest:9091"
 )
 
 func depositHandler(w http.ResponseWriter, r *http.Request) {
@@ -58,9 +60,17 @@ func withdrawHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	ctx := context.Background()
+	serviceConfig := &config.ServiceConfig{}
+	if configErr := envconfig.Process(ctx, serviceConfig); configErr != nil {
+		log.Fatal(ctx, "failed to init config", configErr)
+	}
+
 	http.HandleFunc("/deposit", depositHandler)
 	http.HandleFunc("/withdraw", withdrawHandler)
 
-	fmt.Println("rest mock server running on port 9001...")
-	log.Fatal(http.ListenAndServe(":9001", nil))
+	address := fmt.Sprintf("%s:%s", serviceConfig.RestGatewayConfig.Host, serviceConfig.RestGatewayConfig.Port)
+
+	fmt.Println(fmt.Sprintf("rest mock server running on address %s...", address))
+	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", serviceConfig.RestGatewayConfig.Port), nil))
 }

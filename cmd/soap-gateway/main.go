@@ -1,10 +1,14 @@
 package main
 
 import (
+	"context"
 	"encoding/xml"
+	"fmt"
+	"github.com/dinowar/gateway-service/internal/pkg/config"
 	. "github.com/dinowar/gateway-service/internal/pkg/domain/common"
 	. "github.com/dinowar/gateway-service/internal/pkg/domain/soap_gateway"
 	"github.com/google/uuid"
+	"github.com/sethvargo/go-envconfig"
 	"io"
 	"log"
 	"net/http"
@@ -13,7 +17,6 @@ import (
 const (
 	gatewayId = "soap_gateway"
 	soapNS    = "http://schemas.xmlsoap.org/soap/envelope/"
-	address   = "soap:9092"
 )
 
 func soapHandler(w http.ResponseWriter, r *http.Request) {
@@ -79,8 +82,14 @@ func soapHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	http.HandleFunc("/soap", soapHandler)
+	ctx := context.Background()
+	serviceConfig := &config.ServiceConfig{}
+	if configErr := envconfig.Process(ctx, serviceConfig); configErr != nil {
+		log.Fatal(ctx, "failed to init config", configErr)
+	}
+	http.HandleFunc(serviceConfig.SoapGatewayConfig.Endpoint, soapHandler)
 
-	log.Println("soap mock server running on port 9002...")
-	log.Fatal(http.ListenAndServe(":9002", nil))
+	address := fmt.Sprintf("%s:%s", serviceConfig.SoapGatewayConfig.EndpointHost, serviceConfig.SoapGatewayConfig.EndpointPort)
+	log.Println(fmt.Sprintf("soap mock server running on address %s..", address))
+	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", serviceConfig.SoapGatewayConfig.EndpointPort), nil))
 }
