@@ -1,5 +1,21 @@
 package common
 
+import (
+	"github.com/shopspring/decimal"
+	"time"
+)
+
+type Transaction struct {
+	Id          string
+	ReferenceId string
+	AccountId   string
+	Amount      decimal.Decimal
+	Currency    string
+	Status      TransactionStatus
+	Operation   Operation
+	Timestamp   time.Time
+}
+
 type TransactionStatus string
 
 const (
@@ -9,9 +25,9 @@ const (
 	StatusCancelled TransactionStatus = "CANCELLED"
 )
 
-type TransactionType string
+type Operation string
 
 const (
-	Withdraw TransactionStatus = "Withdraw"
-	Deposit  TransactionStatus = "Deposit"
+	Withdraw Operation = "Withdraw"
+	Deposit  Operation = "Deposit"
 )

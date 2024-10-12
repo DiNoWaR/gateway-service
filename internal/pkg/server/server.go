@@ -1,31 +1,20 @@
 package server
 
 import (
-	. "github.com/dinowar/gateway-service/internal/pkg/domain"
 	"github.com/dinowar/gateway-service/internal/pkg/service"
-	"log"
 	"net/http"
 )
 
-var ()
-
 type Server struct {
-	rep      *service.RepositoryService
-	logger   *service.LogService
-	gateways map[string]PaymentGateway
+	rep    *service.RepositoryService
+	logger *service.LogService
 }
 
-func NewAppServer(rep *service.RepositoryService, logger *service.LogService, workerCount int) *Server {
+func NewAppServer(rep *service.RepositoryService, logger *service.LogService) *Server {
 	return &Server{
-		rep:      rep,
-		logger:   logger,
-		gateways: make(map[string]PaymentGateway),
+		rep:    rep,
+		logger: logger,
 	}
-}
-
-func (server *Server) RegisterGateway(name string, gateway PaymentGateway) {
-	server.gateways[name] = gateway
-	log.Printf("registered gateway: %s", name)
 }
 
 func (server *Server) HandleDeposit(w http.ResponseWriter, r *http.Request) {

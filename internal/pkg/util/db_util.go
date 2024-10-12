@@ -2,27 +2,15 @@ package util
 
 import (
 	"database/sql"
+	"fmt"
+	_ "github.com/lib/pq"
 )
 
-func InitDB() (*sql.DB, error) {
-	db, dbErr := sql.Open("sqlite3", "./transactions.db")
+func InitDB(host, port, dbname, user, password string) (*sql.DB, error) {
+	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable", host, port, user, password, dbname)
+	db, dbErr := sql.Open("postgres", connStr)
 	if dbErr != nil {
 		return nil, dbErr
 	}
-	defer db.Close()
-
-	createTableQuery := `
-	CREATE TABLE IF NOT EXISTS transactions (
-		id TEXT PRIMARY KEY,
-		account_id TEXT,
-		amount REAL,
-		currency TEXT,
-		status TEXT,
-		operation TEXT,
-	)`
-	_, execErr := db.Exec(createTableQuery)
-	if execErr != nil {
-		return nil, execErr
-	}
-	return db, dbErr
+	return db, nil
 }

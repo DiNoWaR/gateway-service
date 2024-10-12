@@ -1,0 +1,60 @@
+services:
+  postgres:
+    container_name: postgres
+    image: postgres:latest
+    environment:
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=default_database
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    networks:
+      - app-network
+    restart: always
+
+  gateway-service:
+    container_name: gateway-service
+    build:
+      context: ../
+      dockerfile: Dockerfile.gateway-service
+    ports:
+      - "9090:9090"
+    env_file:
+      - env.txt
+    depends_on:
+      - postgres
+    networks:
+      - app-network
+    restart: always
+
+  rest-gateway:
+    container_name: rest-gateway
+    build:
+      context: ../
+      dockerfile: Dockerfile.rest-gateway
+    env_file:
+      - env.txt
+    depends_on:
+      - postgres
+    networks:
+      - app-network
+    restart: always
+
+  soap-gateway:
+    container_name: soap-gateway
+    build:
+      context: ../
+      dockerfile: Dockerfile.soap-gateway
+    env_file:
+      - env.txt
+    depends_on:
+      - postgres
+    networks:
+      - app-network
+    restart: always
+
+networks:
+  app-network:
+    driver: bridge
