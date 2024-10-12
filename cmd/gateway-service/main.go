@@ -26,8 +26,6 @@ func main() {
 	http.HandleFunc("/withdraw", appServer.HandleWithdraw)
 	http.HandleFunc("/callback", appServer.HandleCallback)
 	http.HandleFunc("/transaction", appServer.HandleGetTransaction)
-	http.HandleFunc("/transactions", appServer.HandleGetAllTransactions)
-
 	log.Println("Server started on :8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
