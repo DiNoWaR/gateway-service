@@ -8,3 +8,10 @@ const (
 	StatusFailed    TransactionStatus = "FAILED"
 	StatusCancelled TransactionStatus = "CANCELLED"
 )
+
+type TransactionType string
+
+const (
+	Withdraw TransactionStatus = "Withdraw"
+	Deposit  TransactionStatus = "Deposit"
+)

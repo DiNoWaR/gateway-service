@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	gatewayId = "soap"
+	gatewayId = "soap_gateway"
 	soapNS    = "http://schemas.xmlsoap.org/soap/envelope/"
 	address   = "soap:9092"
 )
