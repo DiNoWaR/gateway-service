@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"github.com/dinowar/gateway-service/internal/pkg/config"
+	"github.com/dinowar/gateway-service/internal/pkg/gateway"
 	"github.com/dinowar/gateway-service/internal/pkg/server"
 	"github.com/dinowar/gateway-service/internal/pkg/service"
 	"github.com/dinowar/gateway-service/internal/pkg/util"
@@ -32,11 +34,15 @@ func main() {
 	logService := service.NewLogService()
 	appServer := server.NewAppServer(repService, logService)
 
+	// registering gateways
+	appServer.RegisterGateway(serviceConfig.RestGatewayConfig.GatewayId, &gateway.RestGateway{BaseURL: fmt.Sprintf("%s:%s", serviceConfig.RestGatewayConfig.Host, serviceConfig.RestGatewayConfig.Port)})
+	appServer.RegisterGateway(serviceConfig.SoapGatewayConfig.GatewayId, &gateway.SoapGateway{Endpoint: serviceConfig.SoapGatewayConfig.Endpoint})
+
 	http.HandleFunc("/deposit", appServer.HandleDeposit)
 	http.HandleFunc("/withdraw", appServer.HandleWithdraw)
 	http.HandleFunc("/callback", appServer.HandleCallback)
 	http.HandleFunc("/transaction", appServer.HandleGetTransaction)
 
-	log.Println("Server started on :8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Println(fmt.Sprintf("service started on port: %s", serviceConfig.ServicePort))
+	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", serviceConfig.ServicePort), nil))
 }

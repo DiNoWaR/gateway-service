@@ -5,8 +5,8 @@ import (
 	"encoding/xml"
 	"fmt"
 	"github.com/dinowar/gateway-service/internal/pkg/config"
-	. "github.com/dinowar/gateway-service/internal/pkg/domain/common"
-	. "github.com/dinowar/gateway-service/internal/pkg/domain/soap_gateway"
+	. "github.com/dinowar/gateway-service/internal/pkg/domain/model"
+	. "github.com/dinowar/gateway-service/internal/pkg/gateway"
 	"github.com/google/uuid"
 	"github.com/sethvargo/go-envconfig"
 	"io"
@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	gatewayId = "soap_gateway"
+	gatewayId = "soap"
 	soapNS    = "http://schemas.xmlsoap.org/soap/envelope/"
 )
 
@@ -34,50 +34,49 @@ func soapHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var response interface{}
-	if envelope.Body.DepositReq != nil {
-		req := envelope.Body.DepositReq
-		log.Printf("processing deposit request: %+v\n\n", req)
 
+	switch content := envelope.Body.Content.(type) {
+	case DepositReq:
+		req := content
+		log.Printf("processing DepositRequest: %+v\n", req)
 		response = DepositResponse{
+			XMLName:       xml.Name{Local: "DepositResponse"},
 			Gateway:       gatewayId,
 			TransactionID: uuid.NewString(),
 			Status:        StatusSuccess,
-			Message:       "deposit processed successfully",
-			AccountID:     envelope.Body.DepositReq.AccountID,
+			Message:       "Deposit processed successfully",
+			AccountID:     req.AccountID,
 		}
-	} else if envelope.Body.WithdrawReq != nil {
-		req := envelope.Body.WithdrawReq
-		log.Printf("processing withdraw request: %+v\n", req)
-
+	case WithdrawReq:
+		req := content
+		log.Printf("processing WithdrawRequest: %+v\n", req)
 		response = WithdrawResponse{
+			XMLName:       xml.Name{Local: "WithdrawResponse"},
 			Gateway:       gatewayId,
 			TransactionID: uuid.NewString(),
 			Status:        StatusSuccess,
-			Message:       "withdraw processed successfully",
-			AccountID:     envelope.Body.WithdrawReq.AccountID,
+			Message:       "Withdrawal processed successfully",
+			AccountID:     req.AccountID,
 		}
-	} else {
-		http.Error(w, "unknown request", http.StatusBadRequest)
+	default:
+		http.Error(w, "Unknown request", http.StatusBadRequest)
 		return
 	}
 
-	soapResponse := struct {
-		XMLName xml.Name `xml:"soap:Envelope"`
-		SoapNS  string   `xml:"xmlns:soap,attr"`
-		Body    struct {
-			XMLName xml.Name `xml:"soap:Body"`
-			Content interface{}
-		}
-	}{
+	sendSoapResponse(w, response)
+}
+
+func sendSoapResponse(w http.ResponseWriter, response interface{}) {
+	soapResponse := Envelope{
 		SoapNS: soapNS,
+		Body:   Body{Content: response},
 	}
-	soapResponse.Body.Content = response
 
 	w.Header().Set("Content-Type", "text/xml; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	encodeErr := xml.NewEncoder(w).Encode(soapResponse)
 	if encodeErr != nil {
-		return
+		log.Printf("error encoding SOAP response: %v", encodeErr)
 	}
 }
 

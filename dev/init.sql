@@ -9,11 +9,8 @@ CREATE TABLE IF NOT EXISTS transactions (
                                             currency TEXT,
                                             status TEXT,
                                             operation TEXT,
-                                            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                            ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                                             PRIMARY KEY (id, reference_id)
 );
 
 CREATE INDEX idx_transactions_account_id ON transactions(account_id);
-
-CREATE INDEX idx_transactions_status ON transactions(status);
-

@@ -2,8 +2,7 @@ package service
 
 import (
 	"database/sql"
-	. "github.com/dinowar/gateway-service/internal/pkg/domain/common"
-	_ "github.com/mattn/go-sqlite3"
+	. "github.com/dinowar/gateway-service/internal/pkg/domain/model"
 )
 
 type RepositoryService struct {
@@ -14,7 +13,7 @@ func NewRepositoryService(db *sql.DB) *RepositoryService {
 	return &RepositoryService{db: db}
 }
 
-func (rep *RepositoryService) SaveTransaction(txn Transaction) error {
+func (rep *RepositoryService) SaveTransaction(txn *Transaction) error {
 	_, trxSaveErr := rep.db.Exec(
 		"INSERT OR REPLACE INTO transactions (id, reference_id, account_id, amount, currency, status, operation) VALUES (?, ?, ?, ?, ?, ?, ?)",
 		txn.Id, txn.AccountId, txn.Amount, txn.Currency, txn.Status,

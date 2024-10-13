@@ -17,12 +17,14 @@ type DBConfig struct {
 }
 
 type SoapGatewayConfig struct {
+	GatewayId    string `env:"SOAP_GATEWAY_ID"`
 	Endpoint     string `env:"SOAP_GATEWAY_ENDPOINT"`
 	EndpointHost string `env:"SOAP_GATEWAY_ENDPOINT_HOST"`
 	EndpointPort string `env:"SOAP_GATEWAY_ENDPOINT_PORT"`
 }
 
 type RestGatewayConfig struct {
-	Host string `env:"REST_GATEWAY_HOST"`
-	Port string `env:"REST_GATEWAY_PORT"`
+	GatewayId string `env:"REST_GATEWAY_ID"`
+	Host      string `env:"REST_GATEWAY_HOST"`
+	Port      string `env:"REST_GATEWAY_PORT"`
 }
