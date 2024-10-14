@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -8,54 +9,127 @@ import (
 	. "github.com/dinowar/gateway-service/internal/pkg/domain/model"
 	"github.com/google/uuid"
 	"github.com/sethvargo/go-envconfig"
+	"go.uber.org/zap"
 	"log"
 	"net/http"
+	"time"
+)
+
+var (
+	logger *zap.Logger
 )
 
 const (
 	gatewayId = "rest_gateway"
 )
 
+func init() {
+	logger, _ = zap.NewDevelopment()
+}
+
+func asyncProcessDeposit(referenceId string, callbackURL string) {
+	// imitation of delay
+	time.Sleep(1 * time.Second)
+
+	callbackData := map[string]string{
+		"transaction_id": uuid.NewString(),
+		"reference_id":   referenceId,
+		"status":         "SUCCESS",
+		"message":        "deposit processed successfully",
+	}
+
+	sendCallback(callbackURL, callbackData)
+}
+
+func asyncProcessWithdraw(referenceId string, callbackURL string) {
+	// imitation of delay
+	time.Sleep(1 * time.Second)
+
+	callbackData := map[string]string{
+		"transaction_id": uuid.NewString(),
+		"reference_id":   referenceId,
+		"status":         "SUCCESS",
+		"message":        "withdraw processed successfully",
+	}
+
+	sendCallback(callbackURL, callbackData)
+}
+
+func sendCallback(callbackURL string, data map[string]string) {
+	reqBody, marshalErr := json.Marshal(data)
+	if marshalErr != nil {
+		logger.Error("error marshalling callback data", zap.Error(marshalErr))
+		return
+	}
+
+	resp, requestErr := http.Post(callbackURL, "application/json", bytes.NewBuffer(reqBody))
+	if requestErr != nil {
+		logger.Error("error calling callback url:", zap.String("url", callbackURL), zap.Error(requestErr))
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		logger.Info("callback returned non-OK status", zap.String("status", resp.Status))
+	}
+}
+
 func depositHandler(w http.ResponseWriter, r *http.Request) {
 	var req DepositReq
 	decodeErr := json.NewDecoder(r.Body).Decode(&req)
 	if decodeErr != nil {
+		logger.Error("error decoding request", zap.Error(decodeErr))
 		http.Error(w, decodeErr.Error(), http.StatusBadRequest)
 		return
 	}
 
-	log.Printf("received depositrequest: %+v\n", req)
+	callbackURL := r.Header.Get("Callback-URL")
+	if callbackURL == "" {
+		http.Error(w, "missing Callback-URL header", http.StatusBadRequest)
+		return
+	}
+
 	resp := DepositResponse{
 		Gateway:       gatewayId,
 		TransactionID: uuid.NewString(),
 		AccountID:     req.AccountID,
-		Status:        StatusSuccess,
-		Message:       "deposit processed successfully",
+		Status:        StatusPending,
+		Message:       "deposit request is being processed",
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
+
+	go asyncProcessDeposit(req.ReferenceID, callbackURL)
 }
 
 func withdrawHandler(w http.ResponseWriter, r *http.Request) {
 	var req WithdrawReq
 	decodeErr := json.NewDecoder(r.Body).Decode(&req)
 	if decodeErr != nil {
+		logger.Error("error decoding request", zap.Error(decodeErr))
 		http.Error(w, decodeErr.Error(), http.StatusBadRequest)
 		return
 	}
 
-	fmt.Printf("received withdrawrequest: %+v\n", req)
+	callbackURL := r.Header.Get("Callback-URL")
+	if callbackURL == "" {
+		http.Error(w, "missing Callback-URL header", http.StatusBadRequest)
+		return
+	}
+
 	resp := WithdrawResponse{
 		Gateway:       gatewayId,
 		TransactionID: uuid.NewString(),
 		AccountID:     req.AccountID,
-		Status:        StatusSuccess,
-		Message:       "withdrawal processed successfully",
+		Status:        StatusPending,
+		Message:       "withdraw request is being processed",
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
+
+	go asyncProcessWithdraw(req.ReferenceID, callbackURL)
 }
 
 func main() {

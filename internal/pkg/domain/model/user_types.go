@@ -1,6 +1,6 @@
 package model
 
-type ClientDepositRequest struct {
+type ClientRequest struct {
 	Amount    float64 `json:"amount"`
 	Currency  string  `json:"currency"`
 	AccountID string  `json:"account_id"`
@@ -9,6 +9,10 @@ type ClientDepositRequest struct {
 
 type GetTransactionRequest struct {
 	ReferenceId string `json:"reference_id"`
+}
+
+type GetTransactionsRequest struct {
+	AccountId string `json:"account_id"`
 }
 
 type CallbackPayload struct {

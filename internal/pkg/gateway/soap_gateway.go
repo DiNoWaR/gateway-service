@@ -24,18 +24,7 @@ func (sg *SoapGateway) ProcessDeposit(req DepositReq, callbackUrl string) (*Depo
 		return &DepositResponse{}, marshalErr
 	}
 
-	url := fmt.Sprintf("http://%s", sg.Endpoint)
-	httpRequest, httpReqErr := http.NewRequest("POST", url, bytes.NewBuffer(soapReq))
-	if httpReqErr != nil {
-		sg.Logger.Error("failed to create HTTP request", zap.Error(httpReqErr))
-		return &DepositResponse{}, httpReqErr
-	}
-
-	httpRequest.Header.Set("Content-Type", "text/xml; charset=utf-8")
-	httpRequest.Header.Set(callbackHeader, callbackUrl)
-
-	client := &http.Client{}
-	resp, requestErr := client.Do(httpRequest)
+	resp, requestErr := makeRequest(sg.Endpoint, soapReq, callbackUrl, sg.Logger)
 	if requestErr != nil {
 		sg.Logger.Error("http request failed", zap.Error(requestErr))
 		return &DepositResponse{}, requestErr
@@ -58,20 +47,13 @@ func (sg *SoapGateway) ProcessDeposit(req DepositReq, callbackUrl string) (*Depo
 }
 
 func (sg *SoapGateway) ProcessWithdrawal(req WithdrawReq, callbackUrl string) (*WithdrawResponse, error) {
-	soapReq, marshalErr := xml.MarshalIndent(Envelope{
-		XMLName: xml.Name{},
-		Body: Body{
-			WithdrawReq: &req,
-		},
-		SoapNS: "http://schemas.xmlsoap.org/soap/envelope/",
-	}, "", "  ")
+	soapReq, marshalErr := xml.MarshalIndent(Envelope{XMLName: xml.Name{}, Body: Body{WithdrawReq: &req}}, "", "  ")
 	if marshalErr != nil {
 		sg.Logger.Error("xml marshal failed", zap.Error(marshalErr))
 		return &WithdrawResponse{}, marshalErr
 	}
 
-	url := fmt.Sprintf("http://%s", sg.Endpoint)
-	resp, requestErr := http.Post(url, "text/xml; charset=utf-8", bytes.NewBuffer(soapReq))
+	resp, requestErr := makeRequest(sg.Endpoint, soapReq, callbackUrl, sg.Logger)
 	if requestErr != nil {
 		sg.Logger.Error("http request failed", zap.Error(requestErr))
 		return &WithdrawResponse{}, requestErr
@@ -91,4 +73,25 @@ func (sg *SoapGateway) ProcessWithdrawal(req WithdrawReq, callbackUrl string) (*
 	}
 
 	return envelope.Body.WithdrawResponse, nil
+}
+
+func makeRequest(endpoint string, soapReq []byte, callbackUrl string, logger *zap.Logger) (*http.Response, error) {
+	url := fmt.Sprintf("http://%s", endpoint)
+	httpRequest, httpReqErr := http.NewRequest("POST", url, bytes.NewBuffer(soapReq))
+	if httpReqErr != nil {
+		logger.Error("failed to create HTTP request", zap.Error(httpReqErr))
+		return nil, httpReqErr
+	}
+
+	httpRequest.Header.Set("Content-Type", "text/xml; charset=utf-8")
+	httpRequest.Header.Set(callbackHeader, callbackUrl)
+
+	client := &http.Client{}
+	resp, requestErr := client.Do(httpRequest)
+
+	if requestErr != nil {
+		logger.Error("http request failed", zap.Error(requestErr))
+		return resp, requestErr
+	}
+	return resp, nil
 }

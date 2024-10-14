@@ -5,6 +5,8 @@ CREATE TABLE IF NOT EXISTS transactions (   id TEXT,
                                             currency TEXT,
                                             status TEXT,
                                             operation TEXT,
+                                            message TEXT,
+                                            gateway_id TEXT,
                                             ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP);
 
 CREATE INDEX idx_transactions_account_id ON transactions(account_id);

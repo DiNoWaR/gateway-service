@@ -27,6 +27,7 @@ const (
 	xsi            = "http://www.w3.org/2001/XMLSchema-instance"
 	xsd            = "http://www.w3.org/2001/XMLSchema"
 	callbackHeader = "Callback-URL"
+	delay          = 3 * time.Second
 )
 
 func init() {
@@ -106,7 +107,8 @@ func soapHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func processTransaction(transactionId, referenceId string, callbackURL string) {
-	time.Sleep(2 * time.Second)
+	// imitation of delay
+	time.Sleep(delay)
 	message := fmt.Sprintf("%s processed successfully", transactionId)
 
 	callbackData := map[string]string{

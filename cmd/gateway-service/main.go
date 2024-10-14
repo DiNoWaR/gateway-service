@@ -54,6 +54,7 @@ func main() {
 	http.HandleFunc("/withdraw", appServer.HandleWithdraw)
 	http.HandleFunc("/callback", appServer.HandleCallback)
 	http.HandleFunc("/transaction", appServer.HandleGetTransaction)
+	http.HandleFunc("/transactions", appServer.HandleGetTransactions)
 
 	log.Println(fmt.Sprintf("service started on port: %s", serviceConfig.ServicePort))
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", serviceConfig.ServicePort), nil))

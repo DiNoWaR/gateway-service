@@ -58,9 +58,11 @@ type Transaction struct {
 	Id          string
 	ReferenceId string
 	AccountId   string
+	GatewayId   string
 	Amount      decimal.Decimal
 	Currency    string
 	Status      TransactionStatus
+	Message     string
 	Operation   Operation
 	Ts          time.Time
 }
