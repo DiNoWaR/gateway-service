@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/dinowar/gateway-service/internal/pkg/config"
 	. "github.com/dinowar/gateway-service/internal/pkg/domain/model"
-	. "github.com/dinowar/gateway-service/internal/pkg/gateway"
 	"github.com/google/uuid"
 	"github.com/sethvargo/go-envconfig"
 	"log"

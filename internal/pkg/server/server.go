@@ -73,7 +73,7 @@ func (server *Server) HandleDeposit(w http.ResponseWriter, r *http.Request) {
 	//	return
 	//}
 
-	depositReq := gateways.DepositReq{
+	depositReq := DepositReq{
 		Amount:      req.Amount,
 		Currency:    req.Currency,
 		ReferenceID: referenceId,
@@ -82,7 +82,7 @@ func (server *Server) HandleDeposit(w http.ResponseWriter, r *http.Request) {
 
 	depositResp, gatewayErr := gateway.ProcessDeposit(depositReq)
 	if gatewayErr != nil {
-		http.Error(w, "Error processing deposit", http.StatusInternalServerError)
+		http.Error(w, "error processing deposit", http.StatusInternalServerError)
 		server.logger.LogError("HandleDeposit: error processing deposit: %v", gatewayErr)
 		txn.Status = StatusFailed
 		//_ = server.rep.UpdateTransaction(txn)

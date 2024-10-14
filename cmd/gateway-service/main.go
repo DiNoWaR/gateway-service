@@ -9,11 +9,15 @@ import (
 	"github.com/dinowar/gateway-service/internal/pkg/service"
 	"github.com/dinowar/gateway-service/internal/pkg/util"
 	"github.com/sethvargo/go-envconfig"
+	"go.uber.org/zap"
 	"log"
 	"net/http"
 )
 
 func main() {
+	logger, _ := zap.NewProduction()
+	defer logger.Sync()
+
 	ctx := context.Background()
 	serviceConfig := &config.ServiceConfig{}
 	if configErr := envconfig.Process(ctx, serviceConfig); configErr != nil {
@@ -31,12 +35,20 @@ func main() {
 	}
 
 	repService := service.NewRepositoryService(db)
-	logService := service.NewLogService()
+	logService := service.NewLogService(logger)
 	appServer := server.NewAppServer(repService, logService)
 
 	// registering gateways
-	appServer.RegisterGateway(serviceConfig.RestGatewayConfig.GatewayId, &gateway.RestGateway{BaseURL: fmt.Sprintf("%s:%s", serviceConfig.RestGatewayConfig.Host, serviceConfig.RestGatewayConfig.Port)})
-	appServer.RegisterGateway(serviceConfig.SoapGatewayConfig.GatewayId, &gateway.SoapGateway{Endpoint: serviceConfig.SoapGatewayConfig.Endpoint})
+	appServer.RegisterGateway(serviceConfig.RestGatewayConfig.GatewayId,
+		&gateway.RestGateway{
+			BaseURL: fmt.Sprintf("%s:%s", serviceConfig.RestGatewayConfig.Host, serviceConfig.RestGatewayConfig.Port),
+		})
+
+	appServer.RegisterGateway(serviceConfig.SoapGatewayConfig.GatewayId,
+		&gateway.SoapGateway{
+			Endpoint: fmt.Sprintf("%s:%s%s", serviceConfig.SoapGatewayConfig.EndpointHost, serviceConfig.SoapGatewayConfig.EndpointPort, serviceConfig.SoapGatewayConfig.Endpoint),
+			Logger:   logger,
+		})
 
 	http.HandleFunc("/deposit", appServer.HandleDeposit)
 	http.HandleFunc("/withdraw", appServer.HandleWithdraw)

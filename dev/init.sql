@@ -3,7 +3,7 @@ CREATE DATABASE gateway_service_data;
 
 CREATE TABLE IF NOT EXISTS transactions (
                                             id TEXT,
-                                            reference id TEXT,
+                                            reference_id TEXT,
                                             account_id TEXT,
                                             amount NUMERIC(10, 2) CHECK (amount >= 0),
                                             currency TEXT,
@@ -14,3 +14,4 @@ CREATE TABLE IF NOT EXISTS transactions (
 );
 
 CREATE INDEX idx_transactions_account_id ON transactions(account_id);
+CREATE INDEX idx_reference_id ON transactions(reference_id);

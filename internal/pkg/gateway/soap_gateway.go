@@ -3,88 +3,52 @@ package gateway
 import (
 	"bytes"
 	"encoding/xml"
+	. "github.com/dinowar/gateway-service/internal/pkg/domain/model"
+	"go.uber.org/zap"
 	"io"
 	"net/http"
 )
 
 type SoapGateway struct {
 	Endpoint string
+	Logger   *zap.Logger
 }
 
-func (sg *SoapGateway) ProcessDeposit(req DepositReq) (DepositResponse, error) {
-	soapReq, err := createSoapEnvelope("DepositRequest", req)
-	if err != nil {
-		return DepositResponse{}, err
-	}
-
-	resp, err := http.Post(sg.Endpoint, "text/xml; charset=utf-8", bytes.NewBuffer(soapReq))
-	if err != nil {
-		return DepositResponse{}, err
-	}
-	defer resp.Body.Close()
-
-	var depositResp DepositResponse
-	err = parseSoapResponse(resp.Body, &depositResp)
-	if err != nil {
-		return DepositResponse{}, err
-	}
-
-	return depositResp, nil
-}
-
-func (sg *SoapGateway) ProcessWithdrawal(req WithdrawReq) (WithdrawResponse, error) {
-	soapReq, err := createSoapEnvelope("WithdrawRequest", req)
-	if err != nil {
-		return WithdrawResponse{}, err
-	}
-
-	resp, err := http.Post(sg.Endpoint, "text/xml; charset=utf-8", bytes.NewBuffer(soapReq))
-	if err != nil {
-		return WithdrawResponse{}, err
-	}
-	defer resp.Body.Close()
-
-	var withdrawResp WithdrawResponse
-	err = parseSoapResponse(resp.Body, &withdrawResp)
-	if err != nil {
-		return WithdrawResponse{}, err
-	}
-
-	return withdrawResp, nil
-}
-
-func createSoapEnvelope(action string, body interface{}) ([]byte, error) {
-	envelope := struct {
-		XMLName xml.Name `xml:"soap:Envelope"`
-		SoapNS  string   `xml:"xmlns:soap,attr"`
-		XSI     string   `xml:"xmlns:xsi,attr"`
-		XSD     string   `xml:"xmlns:xsd,attr"`
-		Body    struct {
-			XMLName xml.Name `xml:"soap:Body"`
-			Content interface{}
-		}
-	}{
+func (sg *SoapGateway) ProcessDeposit(req DepositReq) (*DepositResponse, error) {
+	soapReq, marshalErr := xml.MarshalIndent(Envelope{
+		XMLName: xml.Name{},
+		Body: Body{
+			DepositReq: &req,
+		},
 		SoapNS: "http://schemas.xmlsoap.org/soap/envelope/",
-		XSI:    "http://www.w3.org/2001/XMLSchema-instance",
-		XSD:    "http://www.w3.org/2001/XMLSchema",
+	}, "", "  ")
+	if marshalErr != nil {
+		sg.Logger.Error("xml marshal failed", zap.Error(marshalErr))
+		return &DepositResponse{}, marshalErr
 	}
-	envelope.Body.Content = body
-	return xml.MarshalIndent(envelope, "", "  ")
+
+	resp, requestErr := http.Post(sg.Endpoint, "text/xml; charset=utf-8", bytes.NewBuffer(soapReq))
+	if requestErr != nil {
+		sg.Logger.Error("http request failed", zap.Error(requestErr))
+		return &DepositResponse{}, requestErr
+	}
+	defer resp.Body.Close()
+
+	responseBytes, readErr := io.ReadAll(resp.Body)
+	if readErr != nil {
+		sg.Logger.Error("http response failed", zap.Error(readErr))
+		return &DepositResponse{}, readErr
+	}
+	var envelope Envelope
+	unmarshalErr := xml.Unmarshal(responseBytes, &envelope)
+	if unmarshalErr != nil {
+		sg.Logger.Error("xml unmarshal failed", zap.Error(unmarshalErr))
+		return &DepositResponse{}, unmarshalErr
+	}
+
+	return envelope.Body.DepositResponse, nil
 }
 
-func parseSoapResponse(body io.Reader, response interface{}) error {
-	var envelope struct {
-		XMLName xml.Name `xml:"Envelope"`
-		Body    struct {
-			XMLName xml.Name `xml:"Body"`
-			Content struct {
-				XMLName xml.Name    `xml:",any"`
-				Value   interface{} `xml:",any"`
-			} `xml:",any"`
-		}
-	}
-	envelope.Body.Content.Value = response
-	decoder := xml.NewDecoder(body)
-	decodeErr := decoder.Decode(&envelope)
-	return decodeErr
+func (sg *SoapGateway) ProcessWithdrawal(req WithdrawReq) (*WithdrawResponse, error) {
+	return &WithdrawResponse{}, nil
 }

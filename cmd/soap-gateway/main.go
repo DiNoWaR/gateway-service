@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/dinowar/gateway-service/internal/pkg/config"
 	. "github.com/dinowar/gateway-service/internal/pkg/domain/model"
-	. "github.com/dinowar/gateway-service/internal/pkg/gateway"
 	"github.com/google/uuid"
 	"github.com/sethvargo/go-envconfig"
 	"io"
@@ -17,11 +16,14 @@ import (
 const (
 	gatewayId = "soap"
 	soapNS    = "http://schemas.xmlsoap.org/soap/envelope/"
+	xsi       = "http://www.w3.org/2001/XMLSchema-instance"
+	xsd       = "http://www.w3.org/2001/XMLSchema"
 )
 
 func soapHandler(w http.ResponseWriter, r *http.Request) {
 	bodyBytes, readErr := io.ReadAll(r.Body)
 	if readErr != nil {
+		fmt.Println(readErr.Error())
 		http.Error(w, readErr.Error(), http.StatusBadRequest)
 		return
 	}
@@ -29,55 +31,56 @@ func soapHandler(w http.ResponseWriter, r *http.Request) {
 	var envelope Envelope
 	unmarshalErr := xml.Unmarshal(bodyBytes, &envelope)
 	if unmarshalErr != nil {
+		fmt.Println(unmarshalErr.Error())
 		http.Error(w, unmarshalErr.Error(), http.StatusBadRequest)
 		return
 	}
 
 	var response interface{}
+	if envelope.Body.DepositReq != nil {
+		req := envelope.Body.DepositReq
+		fmt.Printf("Processing CashInRequest: %+v\n", req)
 
-	switch content := envelope.Body.Content.(type) {
-	case DepositReq:
-		req := content
-		log.Printf("processing DepositRequest: %+v\n", req)
 		response = DepositResponse{
-			XMLName:       xml.Name{Local: "DepositResponse"},
 			Gateway:       gatewayId,
 			TransactionID: uuid.NewString(),
 			Status:        StatusSuccess,
-			Message:       "Deposit processed successfully",
-			AccountID:     req.AccountID,
+			Message:       "CashIn processed successfully",
 		}
-	case WithdrawReq:
-		req := content
-		log.Printf("processing WithdrawRequest: %+v\n", req)
+	} else if envelope.Body.WithdrawReq != nil {
+		req := envelope.Body.WithdrawReq
+		fmt.Printf("Processing CashOutRequest: %+v\n", req)
+
 		response = WithdrawResponse{
-			XMLName:       xml.Name{Local: "WithdrawResponse"},
 			Gateway:       gatewayId,
 			TransactionID: uuid.NewString(),
 			Status:        StatusSuccess,
-			Message:       "Withdrawal processed successfully",
-			AccountID:     req.AccountID,
+			Message:       "CashOut processed successfully",
 		}
-	default:
+	} else {
 		http.Error(w, "Unknown request", http.StatusBadRequest)
 		return
 	}
 
-	sendSoapResponse(w, response)
-}
-
-func sendSoapResponse(w http.ResponseWriter, response interface{}) {
-	soapResponse := Envelope{
+	soapResponse := struct {
+		XMLName xml.Name `xml:"soap:Envelope"`
+		SoapNS  string   `xml:"xmlns:soap,attr"`
+		XSI     string   `xml:"xmlns:xsi,attr"`
+		XSD     string   `xml:"xmlns:xsd,attr"`
+		Body    struct {
+			XMLName xml.Name `xml:"soap:Body"`
+			Content interface{}
+		}
+	}{
 		SoapNS: soapNS,
-		Body:   Body{Content: response},
+		XSI:    xsi,
+		XSD:    xsd,
 	}
+	soapResponse.Body.Content = response
 
 	w.Header().Set("Content-Type", "text/xml; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	encodeErr := xml.NewEncoder(w).Encode(soapResponse)
-	if encodeErr != nil {
-		log.Printf("error encoding SOAP response: %v", encodeErr)
-	}
+	xml.NewEncoder(w).Encode(soapResponse)
 }
 
 func main() {
