@@ -12,7 +12,7 @@ type RestGateway struct {
 	BaseURL string
 }
 
-func (rg *RestGateway) ProcessDeposit(req DepositReq) (*DepositResponse, error) {
+func (rg *RestGateway) ProcessDeposit(req DepositReq, callbackUrl string) (*DepositResponse, error) {
 	url := fmt.Sprintf("%s/deposit", rg.BaseURL)
 	jsonData, marshalErr := json.Marshal(req)
 	if marshalErr != nil {
@@ -34,7 +34,7 @@ func (rg *RestGateway) ProcessDeposit(req DepositReq) (*DepositResponse, error) 
 	return &depositResp, nil
 }
 
-func (rg *RestGateway) ProcessWithdrawal(req WithdrawReq) (*WithdrawResponse, error) {
+func (rg *RestGateway) ProcessWithdrawal(req WithdrawReq, callbackUrl string) (*WithdrawResponse, error) {
 	url := fmt.Sprintf("%s/withdraw", rg.BaseURL)
 	jsonData, marshalErr := json.Marshal(req)
 	if marshalErr != nil {

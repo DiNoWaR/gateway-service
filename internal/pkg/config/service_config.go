@@ -1,11 +1,12 @@
 package config
 
 type ServiceConfig struct {
-	ServiceHost       string `env:"GATEWAY_SERVICE_HOST"`
-	ServicePort       string `env:"GATEWAY_SERVICE_PORT"`
-	SoapGatewayConfig SoapGatewayConfig
-	RestGatewayConfig RestGatewayConfig
-	DBConfig          DBConfig
+	ServiceHost             string `env:"GATEWAY_SERVICE_HOST"`
+	ServicePort             string `env:"GATEWAY_SERVICE_PORT"`
+	ServiceCallbackEndpoint string `env:"GATEWAY_SERVICE_CALLBACK_ENDPOINT"`
+	SoapGatewayConfig       SoapGatewayConfig
+	RestGatewayConfig       RestGatewayConfig
+	DBConfig                DBConfig
 }
 
 type DBConfig struct {

@@ -10,3 +10,10 @@ type ClientDepositRequest struct {
 type GetTransactionRequest struct {
 	ReferenceId string `json:"reference_id"`
 }
+
+type CallbackPayload struct {
+	TransactionId string `json:"transaction_id"`
+	ReferenceId   string `json:"reference_id"`
+	Status        string `json:"status"`
+	Message       string `json:"message"`
+}

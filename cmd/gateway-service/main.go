@@ -36,7 +36,7 @@ func main() {
 
 	repService := service.NewRepositoryService(db)
 	logService := service.NewLogService(logger)
-	appServer := server.NewAppServer(repService, logService)
+	appServer := server.NewAppServer(repService, logService, serviceConfig)
 
 	// registering gateways
 	appServer.RegisterGateway(serviceConfig.RestGatewayConfig.GatewayId,

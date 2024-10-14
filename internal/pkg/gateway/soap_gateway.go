@@ -10,26 +10,32 @@ import (
 	"net/http"
 )
 
+const callbackHeader = "Callback-URL"
+
 type SoapGateway struct {
 	Endpoint string
 	Logger   *zap.Logger
 }
 
-func (sg *SoapGateway) ProcessDeposit(req DepositReq) (*DepositResponse, error) {
-	soapReq, marshalErr := xml.MarshalIndent(Envelope{
-		XMLName: xml.Name{},
-		Body: Body{
-			DepositReq: &req,
-		},
-		SoapNS: "http://schemas.xmlsoap.org/soap/envelope/",
-	}, "", "  ")
+func (sg *SoapGateway) ProcessDeposit(req DepositReq, callbackUrl string) (*DepositResponse, error) {
+	soapReq, marshalErr := xml.MarshalIndent(Envelope{XMLName: xml.Name{}, Body: Body{DepositReq: &req}}, "", "  ")
 	if marshalErr != nil {
 		sg.Logger.Error("xml marshal failed", zap.Error(marshalErr))
 		return &DepositResponse{}, marshalErr
 	}
 
 	url := fmt.Sprintf("http://%s", sg.Endpoint)
-	resp, requestErr := http.Post(url, "text/xml; charset=utf-8", bytes.NewBuffer(soapReq))
+	httpRequest, httpReqErr := http.NewRequest("POST", url, bytes.NewBuffer(soapReq))
+	if httpReqErr != nil {
+		sg.Logger.Error("failed to create HTTP request", zap.Error(httpReqErr))
+		return &DepositResponse{}, httpReqErr
+	}
+
+	httpRequest.Header.Set("Content-Type", "text/xml; charset=utf-8")
+	httpRequest.Header.Set(callbackHeader, callbackUrl)
+
+	client := &http.Client{}
+	resp, requestErr := client.Do(httpRequest)
 	if requestErr != nil {
 		sg.Logger.Error("http request failed", zap.Error(requestErr))
 		return &DepositResponse{}, requestErr
@@ -51,7 +57,7 @@ func (sg *SoapGateway) ProcessDeposit(req DepositReq) (*DepositResponse, error) 
 	return envelope.Body.DepositResponse, nil
 }
 
-func (sg *SoapGateway) ProcessWithdrawal(req WithdrawReq) (*WithdrawResponse, error) {
+func (sg *SoapGateway) ProcessWithdrawal(req WithdrawReq, callbackUrl string) (*WithdrawResponse, error) {
 	soapReq, marshalErr := xml.MarshalIndent(Envelope{
 		XMLName: xml.Name{},
 		Body: Body{

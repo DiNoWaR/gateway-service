@@ -2,6 +2,7 @@ package service
 
 import (
 	"database/sql"
+	"errors"
 	. "github.com/dinowar/gateway-service/internal/pkg/domain/model"
 )
 
@@ -41,6 +42,9 @@ func (rep *RepositoryService) GetTransaction(referenceId string) (Transaction, e
 		WHERE reference_id = $1`, referenceId)
 
 	trxErr := row.Scan(&txn.Id, &txn.ReferenceId, &txn.AccountId, &txn.Amount, &txn.Currency, &txn.Status, &txn.Operation, &txn.Ts)
+	if errors.Is(trxErr, sql.ErrNoRows) {
+		return Transaction{}, nil
+	}
 	if trxErr != nil {
 		return Transaction{}, trxErr
 	}
