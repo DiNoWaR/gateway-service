@@ -42,6 +42,7 @@ func main() {
 	appServer.RegisterGateway(serviceConfig.RestGatewayConfig.GatewayId,
 		&gateway.RestGateway{
 			BaseURL: fmt.Sprintf("%s:%s", serviceConfig.RestGatewayConfig.Host, serviceConfig.RestGatewayConfig.Port),
+			Logger:  logger,
 		})
 
 	appServer.RegisterGateway(serviceConfig.SoapGatewayConfig.GatewayId,

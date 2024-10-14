@@ -137,6 +137,7 @@ func (server *Server) HandleWithdraw(w http.ResponseWriter, r *http.Request) {
 	txn := &Transaction{
 		ReferenceId: referenceId,
 		AccountId:   req.AccountID,
+		GatewayId:   req.GatewayID,
 		Amount:      decimal.NewFromFloat(req.Amount),
 		Currency:    req.Currency,
 		Status:      StatusPending,
