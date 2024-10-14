@@ -5,7 +5,7 @@ services:
     environment:
       - POSTGRES_USER=admin
       - POSTGRES_PASSWORD=password
-      - POSTGRES_DB=default_database
+      - POSTGRES_DB=default
     volumes:
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     ports:

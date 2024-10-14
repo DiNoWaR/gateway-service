@@ -6,3 +6,7 @@ type ClientDepositRequest struct {
 	AccountID string  `json:"account_id"`
 	GatewayID string  `json:"gateway_id"`
 }
+
+type GetTransactionRequest struct {
+	ReferenceId string `json:"reference_id"`
+}

@@ -13,10 +13,11 @@ type Envelope struct {
 }
 
 type Body struct {
-	XMLName         xml.Name         `xml:"Body"`
-	DepositReq      *DepositReq      `xml:"DepositRequest"`
-	WithdrawReq     *WithdrawReq     `xml:"WithdrawRequest"`
-	DepositResponse *DepositResponse `xml:"DepositResponse"`
+	XMLName          xml.Name          `xml:"Body"`
+	DepositReq       *DepositReq       `xml:"DepositRequest"`
+	WithdrawReq      *WithdrawReq      `xml:"WithdrawRequest"`
+	DepositResponse  *DepositResponse  `xml:"DepositResponse"`
+	WithdrawResponse *WithdrawResponse `xml:"WithdrawResponse"`
 }
 
 type DepositReq struct {

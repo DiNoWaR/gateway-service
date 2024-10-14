@@ -66,12 +66,12 @@ func (server *Server) HandleDeposit(w http.ResponseWriter, r *http.Request) {
 		Ts:          time.Now(),
 	}
 
-	//trxErr := server.rep.SaveTransaction(txn)
-	//if trxErr != nil {
-	//	http.Error(w, "error saving transaction", http.StatusInternalServerError)
-	//	server.logger.LogError("HandleDeposit: error saving transaction: %v", trxErr)
-	//	return
-	//}
+	trxErr := server.rep.SaveTransaction(txn)
+	if trxErr != nil {
+		http.Error(w, "error saving transaction", http.StatusInternalServerError)
+		server.logger.LogError("HandleDeposit: error saving transaction: %v", trxErr)
+		return
+	}
 
 	depositReq := DepositReq{
 		Amount:      req.Amount,
@@ -84,24 +84,15 @@ func (server *Server) HandleDeposit(w http.ResponseWriter, r *http.Request) {
 	if gatewayErr != nil {
 		http.Error(w, "error processing deposit", http.StatusInternalServerError)
 		server.logger.LogError("HandleDeposit: error processing deposit: %v", gatewayErr)
-		txn.Status = StatusFailed
-		//_ = server.rep.UpdateTransaction(txn)
 		return
 	}
 
-	txn.Status = depositResp.Status
-	txn.Id = depositResp.TransactionID
-	//err = server.rep.UpdateTransaction(txn)
-	//if err != nil {
-	//	http.Error(w, "Error updating transaction", http.StatusInternalServerError)
-	//	server.logger.LogError("HandleDeposit: error updating transaction: %v", err)
-	//	return
-	//}
-
 	response := map[string]interface{}{
-		"transaction_id": txn.Id,
-		"status":         txn.Status,
-		"message":        depositResp.Message,
+		"transaction_status": txn.Status,
+		"operation_type":     Deposit,
+		"gateway":            depositResp.Gateway,
+		"account_id":         req.AccountID,
+		"reference_id":       txn.ReferenceId,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -121,5 +112,28 @@ func (server *Server) HandleCallback(w http.ResponseWriter, r *http.Request) {
 }
 
 func (server *Server) HandleGetTransaction(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 
+	var transactionReq GetTransactionRequest
+	decodeErr := json.NewDecoder(r.Body).Decode(&transactionReq)
+	if decodeErr != nil {
+		server.logger.LogError("HandleGetTransaction: error decoding request body: %v", decodeErr)
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+	}
+
+	transaction, trErr := server.rep.GetTransaction(transactionReq.ReferenceId)
+	if trErr != nil {
+		server.logger.LogError("HandleGetTransaction: error getting transaction: %v", trErr)
+		http.Error(w, "error getting transaction", http.StatusInternalServerError)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	encoderErr := json.NewEncoder(w).Encode(transaction)
+	if encoderErr != nil {
+		server.logger.LogError("HandleGetTransaction: error encoding response: %v", encoderErr)
+	}
 }

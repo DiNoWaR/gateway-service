@@ -8,10 +8,13 @@ import (
 	. "github.com/dinowar/gateway-service/internal/pkg/domain/model"
 	"github.com/google/uuid"
 	"github.com/sethvargo/go-envconfig"
+	"go.uber.org/zap"
 	"io"
 	"log"
 	"net/http"
 )
+
+var logger *zap.Logger
 
 const (
 	gatewayId = "soap"
@@ -20,10 +23,14 @@ const (
 	xsd       = "http://www.w3.org/2001/XMLSchema"
 )
 
+func init() {
+	logger, _ = zap.NewDevelopment()
+}
+
 func soapHandler(w http.ResponseWriter, r *http.Request) {
 	bodyBytes, readErr := io.ReadAll(r.Body)
 	if readErr != nil {
-		fmt.Println(readErr.Error())
+		logger.Error("", zap.Error(readErr))
 		http.Error(w, readErr.Error(), http.StatusBadRequest)
 		return
 	}
@@ -31,7 +38,7 @@ func soapHandler(w http.ResponseWriter, r *http.Request) {
 	var envelope Envelope
 	unmarshalErr := xml.Unmarshal(bodyBytes, &envelope)
 	if unmarshalErr != nil {
-		fmt.Println(unmarshalErr.Error())
+		logger.Error("", zap.Error(unmarshalErr))
 		http.Error(w, unmarshalErr.Error(), http.StatusBadRequest)
 		return
 	}
@@ -46,6 +53,7 @@ func soapHandler(w http.ResponseWriter, r *http.Request) {
 			TransactionID: uuid.NewString(),
 			Status:        StatusSuccess,
 			Message:       "CashIn processed successfully",
+			AccountID:     req.AccountID,
 		}
 	} else if envelope.Body.WithdrawReq != nil {
 		req := envelope.Body.WithdrawReq
