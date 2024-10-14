@@ -71,13 +71,6 @@ func (server *Server) HandleDeposit(w http.ResponseWriter, r *http.Request) {
 		Ts:          time.Now(),
 	}
 
-	trxErr := server.rep.SaveTransaction(txn)
-	if trxErr != nil {
-		http.Error(w, "error saving transaction", http.StatusInternalServerError)
-		server.logger.LogError("HandleDeposit: error saving transaction: %v", trxErr)
-		return
-	}
-
 	depositReq := DepositReq{
 		Amount:      req.Amount,
 		Currency:    req.Currency,
@@ -89,6 +82,13 @@ func (server *Server) HandleDeposit(w http.ResponseWriter, r *http.Request) {
 	if gatewayErr != nil {
 		http.Error(w, "error processing deposit", http.StatusInternalServerError)
 		server.logger.LogError("HandleDeposit: error processing deposit: %v", gatewayErr)
+		return
+	}
+
+	trxErr := server.rep.SaveTransaction(txn)
+	if trxErr != nil {
+		http.Error(w, "error saving transaction", http.StatusInternalServerError)
+		server.logger.LogError("HandleDeposit: error saving transaction: %v", trxErr)
 		return
 	}
 
@@ -145,13 +145,6 @@ func (server *Server) HandleWithdraw(w http.ResponseWriter, r *http.Request) {
 		Ts:          time.Now(),
 	}
 
-	trxErr := server.rep.SaveTransaction(txn)
-	if trxErr != nil {
-		http.Error(w, "error saving transaction", http.StatusInternalServerError)
-		server.logger.LogError("HandleDeposit: error saving transaction: %v", trxErr)
-		return
-	}
-
 	withdrawReq := WithdrawReq{
 		Amount:      req.Amount,
 		Currency:    req.Currency,
@@ -163,6 +156,13 @@ func (server *Server) HandleWithdraw(w http.ResponseWriter, r *http.Request) {
 	if gatewayErr != nil {
 		http.Error(w, "error processing deposit", http.StatusInternalServerError)
 		server.logger.LogError("HandleDeposit: error processing deposit: %v", gatewayErr)
+		return
+	}
+
+	trxErr := server.rep.SaveTransaction(txn)
+	if trxErr != nil {
+		http.Error(w, "error saving transaction", http.StatusInternalServerError)
+		server.logger.LogError("HandleDeposit: error saving transaction: %v", trxErr)
 		return
 	}
 

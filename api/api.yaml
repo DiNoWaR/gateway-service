@@ -1,0 +1,204 @@
+openapi: 3.0.0
+info:
+  title: Payment Gateway Service API
+  description: API for handling deposit and withdrawal transactions, and querying transaction details.
+  version: 1.0.0
+servers:
+  - url: http://localhost:9090
+    description: Local development server
+
+paths:
+  /deposit:
+    post:
+      summary: Process a deposit request
+      operationId: processDeposit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DepositRequest'
+      responses:
+        '200':
+          description: Deposit processed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DepositResponse'
+        '400':
+          description: Invalid deposit request
+
+  /withdraw:
+    post:
+      summary: Process a withdrawal request
+      operationId: processWithdraw
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WithdrawRequest'
+      responses:
+        '200':
+          description: Withdrawal processed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WithdrawResponse'
+        '400':
+          description: Invalid withdrawal request
+
+  /transaction:
+    get:
+      summary: Get a specific transaction by reference ID
+      operationId: getTransaction
+      parameters:
+        - name: reference_id
+          in: query
+          required: true
+          schema:
+            type: string
+            example: "5da37158-d41d-4280-bcef-2e88b12214e6"
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaction'
+        '400':
+          description: Invalid request
+        '404':
+          description: Transaction not found
+
+  /transactions:
+    get:
+      summary: Get all transactions for a specific account ID
+      operationId: getTransactions
+      parameters:
+        - name: account_id
+          in: query
+          required: true
+          schema:
+            type: string
+            example: "ACC123"
+      responses:
+        '200':
+          description: A list of transactions for the account
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Transaction'
+        '400':
+          description: Invalid request
+        '404':
+          description: No transactions found
+
+components:
+  schemas:
+    DepositRequest:
+      type: object
+      properties:
+        amount:
+          type: number
+          format: float
+          example: 100.50
+        currency:
+          type: string
+          example: "USD"
+        account_id:
+          type: string
+          example: "ACC123"
+        gateway_id:
+          type: string
+          example: "rest_gateway"
+
+    DepositResponse:
+      type: object
+      properties:
+        gateway:
+          type: string
+          example: "rest_gateway"
+        transaction_id:
+          type: string
+          example: "12345"
+        account_id:
+          type: string
+          example: "ACC123"
+        status:
+          type: string
+          example: "SUCCESS"
+        message:
+          type: string
+          example: "Deposit processed successfully"
+
+    WithdrawRequest:
+      type: object
+      properties:
+        amount:
+          type: number
+          format: float
+          example: 50.00
+        currency:
+          type: string
+          example: "USD"
+        account_id:
+          type: string
+          example: "ACC123"
+        gateway_id:
+          type: string
+          example: "soap_gateway"
+
+    WithdrawResponse:
+      type: object
+      properties:
+        gateway:
+          type: string
+          example: "soap_gateway"
+        transaction_id:
+          type: string
+          example: "12345"
+        account_id:
+          type: string
+          example: "ACC123"
+        status:
+          type: string
+          example: "SUCCESS"
+        message:
+          type: string
+          example: "Withdrawal processed successfully"
+
+    Transaction:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "12345"
+        reference_id:
+          type: string
+          example: "5da37158-d41d-4280-bcef-2e88b12214e6"
+        account_id:
+          type: string
+          example: "ACC123"
+        amount:
+          type: number
+          format: float
+          example: 100.50
+        currency:
+          type: string
+          example: "USD"
+        status:
+          type: string
+          example: "SUCCESS"
+        operation:
+          type: string
+          example: "DEPOSIT"
+        message:
+          type: string
+          example: "Transaction processed successfully"
+        ts:
+          type: string
+          format: date-time
+          example: "2024-10-14T14:32:20.123Z"
