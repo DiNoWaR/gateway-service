@@ -41,14 +41,18 @@ func main() {
 	// registering gateways
 	appServer.RegisterGateway(serviceConfig.RestGatewayConfig.GatewayId,
 		&gateway.RestGateway{
-			BaseURL: fmt.Sprintf("%s:%s", serviceConfig.RestGatewayConfig.Host, serviceConfig.RestGatewayConfig.Port),
-			Logger:  logger,
+			BaseURL:         fmt.Sprintf("%s:%s", serviceConfig.RestGatewayConfig.Host, serviceConfig.RestGatewayConfig.Port),
+			Logger:          logger,
+			RetryInterval:   serviceConfig.RetryInterval,
+			RetryElapseTime: serviceConfig.RetryElapseTime,
 		})
 
 	appServer.RegisterGateway(serviceConfig.SoapGatewayConfig.GatewayId,
 		&gateway.SoapGateway{
-			Endpoint: fmt.Sprintf("%s:%s%s", serviceConfig.SoapGatewayConfig.EndpointHost, serviceConfig.SoapGatewayConfig.EndpointPort, serviceConfig.SoapGatewayConfig.Endpoint),
-			Logger:   logger,
+			Endpoint:        fmt.Sprintf("%s:%s%s", serviceConfig.SoapGatewayConfig.EndpointHost, serviceConfig.SoapGatewayConfig.EndpointPort, serviceConfig.SoapGatewayConfig.Endpoint),
+			Logger:          logger,
+			RetryInterval:   serviceConfig.RetryInterval,
+			RetryElapseTime: serviceConfig.RetryElapseTime,
 		})
 
 	http.HandleFunc("/deposit", appServer.HandleDeposit)

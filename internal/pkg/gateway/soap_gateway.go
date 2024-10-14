@@ -5,16 +5,16 @@ import (
 	"encoding/xml"
 	"fmt"
 	. "github.com/dinowar/gateway-service/internal/pkg/domain/model"
+	"github.com/dinowar/gateway-service/internal/pkg/util"
 	"go.uber.org/zap"
 	"io"
-	"net/http"
 )
 
-const callbackHeader = "Callback-URL"
-
 type SoapGateway struct {
-	Endpoint string
-	Logger   *zap.Logger
+	Endpoint        string
+	Logger          *zap.Logger
+	RetryInterval   int
+	RetryElapseTime int
 }
 
 func (sg *SoapGateway) ProcessDeposit(req DepositReq, callbackUrl string) (*DepositResponse, error) {
@@ -24,10 +24,11 @@ func (sg *SoapGateway) ProcessDeposit(req DepositReq, callbackUrl string) (*Depo
 		return &DepositResponse{}, marshalErr
 	}
 
-	resp, requestErr := makeRequest(sg.Endpoint, soapReq, callbackUrl, sg.Logger)
-	if requestErr != nil {
-		sg.Logger.Error("http request failed", zap.Error(requestErr))
-		return &DepositResponse{}, requestErr
+	url := fmt.Sprintf("http://%s", sg.Endpoint)
+	resp, retryErr := util.RetryableRequest(url, "POST", bytes.NewBuffer(soapReq), callbackUrl, "text/xml; charset=utf-8", sg.RetryInterval, sg.RetryElapseTime)
+	if retryErr != nil {
+		sg.Logger.Error("HandleDeposit: error processing deposit after retries: %v", zap.Error(retryErr))
+		return &DepositResponse{}, retryErr
 	}
 	defer resp.Body.Close()
 
@@ -53,10 +54,11 @@ func (sg *SoapGateway) ProcessWithdrawal(req WithdrawReq, callbackUrl string) (*
 		return &WithdrawResponse{}, marshalErr
 	}
 
-	resp, requestErr := makeRequest(sg.Endpoint, soapReq, callbackUrl, sg.Logger)
-	if requestErr != nil {
-		sg.Logger.Error("http request failed", zap.Error(requestErr))
-		return &WithdrawResponse{}, requestErr
+	url := fmt.Sprintf("http://%s", sg.Endpoint)
+	resp, retryErr := util.RetryableRequest(url, "POST", bytes.NewBuffer(soapReq), callbackUrl, "text/xml; charset=utf-8", sg.RetryInterval, sg.RetryElapseTime)
+	if retryErr != nil {
+		sg.Logger.Error("HandleDeposit: error processing deposit after retries: %v", zap.Error(retryErr))
+		return &WithdrawResponse{}, retryErr
 	}
 	defer resp.Body.Close()
 
@@ -73,25 +75,4 @@ func (sg *SoapGateway) ProcessWithdrawal(req WithdrawReq, callbackUrl string) (*
 	}
 
 	return envelope.Body.WithdrawResponse, nil
-}
-
-func makeRequest(endpoint string, soapReq []byte, callbackUrl string, logger *zap.Logger) (*http.Response, error) {
-	url := fmt.Sprintf("http://%s", endpoint)
-	httpRequest, httpReqErr := http.NewRequest("POST", url, bytes.NewBuffer(soapReq))
-	if httpReqErr != nil {
-		logger.Error("failed to create HTTP request", zap.Error(httpReqErr))
-		return nil, httpReqErr
-	}
-
-	httpRequest.Header.Set("Content-Type", "text/xml; charset=utf-8")
-	httpRequest.Header.Set(callbackHeader, callbackUrl)
-
-	client := &http.Client{}
-	resp, requestErr := client.Do(httpRequest)
-
-	if requestErr != nil {
-		logger.Error("http request failed", zap.Error(requestErr))
-		return resp, requestErr
-	}
-	return resp, nil
 }

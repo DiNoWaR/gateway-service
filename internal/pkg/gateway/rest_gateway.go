@@ -5,14 +5,16 @@ import (
 	"encoding/json"
 	"fmt"
 	. "github.com/dinowar/gateway-service/internal/pkg/domain/model"
+	"github.com/dinowar/gateway-service/internal/pkg/util"
 	"go.uber.org/zap"
 	"io"
-	"net/http"
 )
 
 type RestGateway struct {
-	BaseURL string
-	Logger  *zap.Logger
+	BaseURL         string
+	Logger          *zap.Logger
+	RetryInterval   int
+	RetryElapseTime int
 }
 
 func (rg *RestGateway) ProcessDeposit(req DepositReq, callbackUrl string) (*DepositResponse, error) {
@@ -23,23 +25,12 @@ func (rg *RestGateway) ProcessDeposit(req DepositReq, callbackUrl string) (*Depo
 		return &DepositResponse{}, marshalErr
 	}
 
-	httpReq, httpReqErr := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
-	if httpReqErr != nil {
-		rg.Logger.Error("failed to create request", zap.String("url", url), zap.Error(httpReqErr))
-		return &DepositResponse{}, httpReqErr
-	}
-
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set(callbackHeader, callbackUrl)
-
-	client := &http.Client{}
-	resp, requestErr := client.Do(httpReq)
-	if requestErr != nil {
-		rg.Logger.Error("http request failed", zap.String("url", url), zap.Error(requestErr))
-		return &DepositResponse{}, requestErr
+	resp, retryErr := util.RetryableRequest(url, "POST", bytes.NewBuffer(jsonData), callbackUrl, "application/json", rg.RetryInterval, rg.RetryElapseTime)
+	if retryErr != nil {
+		rg.Logger.Error("HandleDeposit: error processing deposit after retries: %v", zap.Error(retryErr))
+		return &DepositResponse{}, retryErr
 	}
 	defer resp.Body.Close()
-
 	responseBytes, readErr := io.ReadAll(resp.Body)
 	if readErr != nil {
 		rg.Logger.Error("http response failed", zap.Error(readErr))
@@ -64,20 +55,10 @@ func (rg *RestGateway) ProcessWithdrawal(req WithdrawReq, callbackUrl string) (*
 		return &WithdrawResponse{}, marshalErr
 	}
 
-	httpReq, httpReqErr := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
-	if httpReqErr != nil {
-		rg.Logger.Error("failed to create request", zap.String("url", url), zap.Error(httpReqErr))
-		return &WithdrawResponse{}, httpReqErr
-	}
-
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set(callbackHeader, callbackUrl)
-
-	client := &http.Client{}
-	resp, requestErr := client.Do(httpReq)
-	if requestErr != nil {
-		rg.Logger.Error("http request failed", zap.String("url", url), zap.Error(requestErr))
-		return &WithdrawResponse{}, requestErr
+	resp, retryErr := util.RetryableRequest(url, "POST", bytes.NewBuffer(jsonData), callbackUrl, "application/json", 1, 1)
+	if retryErr != nil {
+		rg.Logger.Error("HandleDeposit: error processing deposit after retries: %v", zap.Error(retryErr))
+		return &WithdrawResponse{}, retryErr
 	}
 	defer resp.Body.Close()
 

@@ -7,6 +7,8 @@ type ServiceConfig struct {
 	SoapGatewayConfig       SoapGatewayConfig
 	RestGatewayConfig       RestGatewayConfig
 	DBConfig                DBConfig
+	RetryInterval           int `env:"GATEWAY_SERVICE_INTERVAL"`
+	RetryElapseTime         int `env:"GATEWAY_SERVICE_ELAPSE_TIME"`
 }
 
 type DBConfig struct {

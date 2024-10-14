@@ -41,7 +41,7 @@ Provides a reliable data store for querying and managing transactions.
 Api spec file is located in the folder **api**. 
 To launch the entire service run the command from **dev** folder
 ```
-docker compose up
+docker-compose up
 ```
 After launched you can make all user requests
 
