@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/dinowar/gateway-service/internal/pkg/config"
 	. "github.com/dinowar/gateway-service/internal/pkg/domain/model"
+	"github.com/dinowar/gateway-service/internal/pkg/util"
 	"github.com/google/uuid"
 	"github.com/sethvargo/go-envconfig"
 	"go.uber.org/zap"
@@ -16,11 +17,13 @@ import (
 )
 
 var (
-	logger *zap.Logger
+	logger          *zap.Logger
+	retryInterval   int
+	retryElapseTime int
 )
 
 const (
-	gatewayId = "rest_gateway"
+	gatewayId = "rest"
 )
 
 func init() {
@@ -62,9 +65,9 @@ func sendCallback(callbackURL string, data map[string]string) {
 		return
 	}
 
-	resp, requestErr := http.Post(callbackURL, "application/json", bytes.NewBuffer(reqBody))
-	if requestErr != nil {
-		logger.Error("error calling callback url:", zap.String("url", callbackURL), zap.Error(requestErr))
+	resp, retryErr := util.RetryableRequest(callbackURL, "POST", bytes.NewBuffer(reqBody), "", "application/json", retryInterval, retryElapseTime)
+	if retryErr != nil {
+		logger.Error("HandleDeposit: error processing deposit after retries: %v", zap.Error(retryErr))
 		return
 	}
 	defer resp.Body.Close()
@@ -138,6 +141,9 @@ func main() {
 	if configErr := envconfig.Process(ctx, serviceConfig); configErr != nil {
 		log.Fatal(ctx, "failed to init config", configErr)
 	}
+
+	retryInterval = serviceConfig.RetryInterval
+	retryElapseTime = serviceConfig.RetryElapseTime
 
 	http.HandleFunc("/deposit", depositHandler)
 	http.HandleFunc("/withdraw", withdrawHandler)

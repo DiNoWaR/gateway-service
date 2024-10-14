@@ -45,6 +45,12 @@ docker-compose up
 ```
 After launched you can make all user requests
 
+
+### Run Unit Tests
+```
+ go test ./... -v
+```
+
 ### Example Requests
 #### Deposit Request
 Send a deposit request to the Gateway Service:
@@ -55,7 +61,7 @@ Send a deposit request to the Gateway Service:
            "amount": 100.50,
            "currency": "USD",
            "account_id": "ACC123",
-           "gateway_id": "rest_gateway"
+           "gateway_id": "rest"
          }'
 ```
 
@@ -69,20 +75,20 @@ curl -X POST http://localhost:9090/withdraw \
            "amount": 50.00,
            "currency": "EUR",
            "account_id": "ACC123",
-           "gateway_id": "soap_gateway"
+           "gateway_id": "soap"
          }'
 ```
 
 #### Get Transaction Request
 ```
-curl -X POST http://localhost:9090/transaction \
+curl -X GET http://localhost:9090/transaction \
      -H "Content-Type: application/json" \
      -d '{"reference_id": "5da37158-d41d-4280-bcef-2e88b12214e6"}'
 ```
 
 #### Get All User Transactions Request
 ```
-curl -X POST http://localhost:9090/transactions \
+curl -X GET http://localhost:9090/transactions \
      -H "Content-Type: application/json" \
-     -d '{"account_id": "ACC123"}'
+     -d '{"account_id": "denis"}'
 ```

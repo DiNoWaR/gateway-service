@@ -13,5 +13,5 @@ func NewLogService(logger *zap.Logger) *LogService {
 }
 
 func (logger LogService) LogError(description string, err error) {
-	logger.logger.Error(description, zap.Error(err))
+	logger.logger.Error(description, zap.String("error", err.Error()))
 }

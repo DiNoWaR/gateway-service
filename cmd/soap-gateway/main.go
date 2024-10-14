@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/dinowar/gateway-service/internal/pkg/config"
 	. "github.com/dinowar/gateway-service/internal/pkg/domain/model"
+	"github.com/dinowar/gateway-service/internal/pkg/util"
 	"github.com/google/uuid"
 	"github.com/sethvargo/go-envconfig"
 	"go.uber.org/zap"
@@ -18,7 +19,9 @@ import (
 )
 
 var (
-	logger *zap.Logger
+	logger          *zap.Logger
+	retryInterval   int
+	retryElapseTime int
 )
 
 const (
@@ -139,10 +142,10 @@ func sendCallback(callbackURL string, data map[string]string) error {
 		return marshalErr
 	}
 
-	resp, respErr := http.Post(callbackURL, "application/json", bytes.NewBuffer(reqBody))
-	if respErr != nil {
-		logger.Error("error posting callback", zap.Error(respErr))
-		return respErr
+	resp, retryErr := util.RetryableRequest(callbackURL, "POST", bytes.NewBuffer(reqBody), "", "application/json", retryInterval, retryElapseTime)
+	if retryErr != nil {
+		logger.Error("HandleDeposit: error processing deposit after retries: %v", zap.Error(retryErr))
+		return retryErr
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
@@ -157,8 +160,11 @@ func main() {
 	if configErr := envconfig.Process(ctx, serviceConfig); configErr != nil {
 		log.Fatal(ctx, "failed to init config", configErr)
 	}
-	http.HandleFunc(serviceConfig.SoapGatewayConfig.Endpoint, soapHandler)
 
+	retryInterval = serviceConfig.RetryInterval
+	retryElapseTime = serviceConfig.RetryElapseTime
+
+	http.HandleFunc(serviceConfig.SoapGatewayConfig.Endpoint, soapHandler)
 	address := fmt.Sprintf("%s:%s", serviceConfig.SoapGatewayConfig.EndpointHost, serviceConfig.SoapGatewayConfig.EndpointPort)
 	log.Println(fmt.Sprintf("soap mock server running on address %s..", address))
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", serviceConfig.SoapGatewayConfig.EndpointPort), nil))
