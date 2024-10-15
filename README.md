@@ -13,7 +13,8 @@ SOAP & REST Gateway Mocks: Simulate external payment gateways that process trans
 Asynchronous Processing: Transactions are processed in the background, and clients are notified through a callback once the transaction is complete.
 PostgreSQL Database: Stores transaction details, including status, amount, and timestamps.
 Dockerized Environment: The entire system is containerized using Docker, and all services, including the database, can be started with Docker Compose.
-Architecture
+
+### Architecture
 The project consists of the following services:
 
 #### Gateway Service:
@@ -51,8 +52,11 @@ After launched you can make all user requests
  go test ./... -v
 ```
 
-### Example Requests
-#### Deposit Request
+### Example Requests / Responses
+
+#### Deposit
+Gateways have id's **rest** and **soap** respectively. You need to pass them in deposit / withdraw requests
+
 Send a deposit request to the Gateway Service:
 ```
     curl -X POST http://localhost:9090/deposit \
@@ -65,7 +69,18 @@ Send a deposit request to the Gateway Service:
          }'
 ```
 
-#### Withdrawal Request
+Get a Deposit response:
+```
+{
+  "account_id": "ACC123",
+  "gateway": "rest",
+  "operation_type": "Deposit",
+  "reference_id": "0ab18432-3800-4481-bd8e-5624238e13ea",
+  "transaction_status": "PENDING"
+}
+```
+
+#### Withdrawal
 Send a withdrawal request to the Gateway Service:
 
 ```
@@ -77,6 +92,18 @@ curl -X POST http://localhost:9090/withdraw \
            "account_id": "ACC123",
            "gateway_id": "soap"
          }'
+```
+Get a Withdraw response:
+
+```
+{
+  "account_id": "ACC123",
+  "gateway": "soap",
+  "operation_type": "Deposit",
+  "reference_id": "82a38864-0a07-487e-92b0-72bac38e1b6e",
+  "transaction_status": "PENDING"
+}
+
 ```
 
 #### Get Transaction Request
